@@ -11,6 +11,7 @@ from reports.subscriptions_report.utils import (convert_to_datetime, get_value, 
 HEADERS = (
     'Subscription ID', 'Subscription External ID', 'Vendor primary key',
     'Subscription Type', 'Google Domain', 'Google Customer ID', 'Item Name', 'Item MPN',
+    'Google SKU', 'Google Product',
     'Creation date', 'Updated date', 'Status', 'Billing Period',
     'Anniversary Day', 'Anniversary Month', 'Contract ID', 'Contract Name',
     'Customer ID', 'Customer Name', 'Customer External ID',

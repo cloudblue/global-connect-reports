@@ -1,18 +1,12 @@
-ansicolors==1.1.8
-certifi==2020.12.5
-chardet==4.0.0
-connect-markdown-renderer==1.0.1
-connect-openapi-client==22.0.1
-et-xmlfile==1.0.1
-idna==2.10
-importlib-metadata==3.7.0
-inflect==4.1.1
-jdcal==1.4.1
-mistune==0.8.4
-openpyxl==3.0.6
-pygments==2.8.0
-pyyaml==5.4.1
-requests==2.25.1
-typing-extensions==3.7.4.3
-urllib3==1.26.3
-zipp==3.4.0
+# Runtime libraries the report entrypoints import directly.
+#
+# Reports are not installed from this file in production. The executor clones
+# this repository into the connect-reports-runner image and runs it against the
+# interpreter and libraries baked into that image -- currently
+# connectacr.azurecr.io/connect-python:3.12.8 with connect-reports-runner==27.4
+# (see the reports-runner repository, prod.Dockerfile).
+#
+# Keep the bounds below in step with that runner release so CI exercises the
+# same major versions as production.
+connect-openapi-client>=25.4
+openpyxl>=3.0.0,<4.0.0
