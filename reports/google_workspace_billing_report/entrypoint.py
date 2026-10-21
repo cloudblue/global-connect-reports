@@ -13,9 +13,6 @@ HEADERS = (
     'Subscription ID', 'Subscription External ID', 'Google Entitlement ID',
     'Subscription Type', 'Purchase Type', 'Google Domain', 'Google Customer ID', 'Item Name', 'Item MPN',
     'Google SKU', 'Google Product', 'Google Offer ID', 'Google Offer SKU Display Name',
-    'Subscription ID', 'Subscription External ID', 'Google Entitlement ID',
-    'Subscription Type', 'Purchase Type', 'Google Domain', 'Google Customer ID', 'Item Name', 'Item MPN',
-    'Google SKU', 'Google Product', 'Google Offer ID', 'Google Offer SKU Display Name',
     'Item Quantity', 'Consumption', 'Google Num Units', 'Google Maximum Units', 'Google Assigned Units',
     'Google Offer Effective Price', 'Google Offer Price',
     'Creation date', 'Updated date', 'Google Creation Time', 'Google Commitment Start Date',
@@ -33,6 +30,8 @@ HEADERS = (
 
 GOOGLE_PRODUCTS = ['PRD-861-570-450', 'PRD-550-104-278']
 
+DEFAULT_STATUSES = ['active', 'suspended', 'terminated', 'terminating']
+
 subscriptions_dict = {}
 
 
@@ -43,34 +42,93 @@ def generate(
         renderer_type=None,
         extra_context_callback=None,
 ):
-    subscriptions = _get_subscriptions(client, parameters)
-    url_for_service = obtain_url_for_service(client)
-    marketplace_id = parameters['mkp']['choices'][0] if parameters.get('mkp').get('choices') else ""
-    google_client = GoogleAPIClient(client, url_for_service, marketplace_id)
-    total = subscriptions.count()
     progress = 0
     if renderer_type == 'csv':
         yield HEADERS
+        progress = 1
+
+    try:
+        subscriptions = _get_subscriptions(client, parameters)
+        google_client = _get_google_client(client, parameters)
+        total = subscriptions.count() + progress
+    except Exception as error:
+        yield _render(_error_row('-', error), renderer_type)
+        progress_callback(1, 1)
+        return
+
+    progress_callback(progress, max(total, 1))
+
+    # An explicit iterator: a ResourceSet is iterable but not an iterator, and
+    # the page fetches happen while it is consumed, so they need guarding too.
+    pending = iter(subscriptions)
+    while True:
+        try:
+            subscription = next(pending)
+        except StopIteration:
+            break
+        except Exception as error:
+            yield _render(_error_row('-', error), renderer_type)
+            break
+
+        yield _render(_safe_process_line(subscription, google_client, client), renderer_type)
         progress += 1
-        total += 1
-        progress_callback(progress, total)
+        progress_callback(progress, max(total, progress))
 
-    for subscription in subscriptions:
-        if renderer_type == 'json':
-            yield {
-                HEADERS[idx].replace(' ', '_').lower(): value
-                for idx, value in enumerate(_process_line(subscription, google_client, client))
-            }
-        else:
-            yield _process_line(subscription, google_client, client)
+    progress_callback(max(progress, 1), max(total, progress, 1))
 
-    progress += 1
-    progress_callback(progress, total)
+
+def _render(row, renderer_type):
+    if renderer_type == 'json':
+        return {
+            HEADERS[idx].replace(' ', '_').lower(): value
+            for idx, value in enumerate(row)
+        }
+    return row
+
+
+def _error_row(subscription_id, error):
+    """Report a failure in the last column instead of letting it escape.
+
+    The reports runner blocks the report template on any exception raised by
+    report code, so one unexpected subscription would take the template down
+    for the whole account until it is unblocked by hand.
+    """
+    row = ['-'] * len(HEADERS)
+    row[0] = subscription_id
+    row[-1] = f'{type(error).__name__}: {error}'
+    return tuple(row)
+
+
+def _safe_process_line(subscription, google_client, connect_client):
+    try:
+        return _process_line(subscription, google_client, connect_client)
+    except Exception as error:
+        return _error_row(subscription.get('id', '-'), error)
+
+
+def _get_google_client(client, parameters):
+    url_for_service = obtain_url_for_service(client)
+    choices = (parameters.get('mkp') or {}).get('choices') or []
+    return GoogleAPIClient(client, url_for_service, choices[0] if choices else "")
+
+
+def _get_products(parameters):
+    """Honour the (required) product parameter, restricted to Google products."""
+    product = parameters.get('product') or {}
+    if product.get('all') is not False or not product.get('choices'):
+        return GOOGLE_PRODUCTS
+    selected = [product_id for product_id in product['choices'] if product_id in GOOGLE_PRODUCTS]
+    if not selected:
+        raise ValueError(
+            'None of the selected products is a Google product '
+            f'({", ".join(GOOGLE_PRODUCTS)}).',
+        )
+    return selected
 
 
 def _get_subscriptions(client, parameters):
     query = R()
-    query &= R().product.id.oneof(GOOGLE_PRODUCTS)
+    query &= R().product.id.oneof(_get_products(parameters))
     if parameters.get('date') and parameters['date']['after'] != '':
         query &= R().events.created.at.ge(parameters['date']['after'])
         query &= R().events.created.at.le(parameters['date']['before'])
@@ -81,9 +139,10 @@ def _get_subscriptions(client, parameters):
     if parameters.get('status') and parameters['status']['all'] is False:
         query &= R().status.oneof(parameters['status']['choices'])
     else:
-        query &= R().status.oneof(['active', 'suspended', 'terminated', 'terminating'])
+        query &= R().status.oneof(DEFAULT_STATUSES)
 
     return client.ns('subscriptions').assets.filter(query)
+
 
 def calculate_period(delta, uom):
     if delta == 1:
@@ -118,7 +177,10 @@ def _fill_subscription_entitlement_offer_data(google_client, google_customer_id,
         subscriptions_dict[google_customer_id][entitlement_id] = {'error': str(err)}
         return
 
-    subscriptions_dict[google_customer_id][entitlement_id]['entitlement_data'] = entitlement_offer_data
+    # setdefault: Connect can hold an entitlement_id that Google did not return
+    # for this customer, in which case the key does not exist yet.
+    entitlement = subscriptions_dict[google_customer_id].setdefault(entitlement_id, {})
+    entitlement['entitlement_data'] = entitlement_offer_data
 
 
 def _get_google_subscriptions(google_client, google_customer_id):
@@ -142,6 +204,9 @@ def _process_google_data(google_subscription):
     data = {}
     entitlement_data = google_subscription.get('entitlement_data', {})
     sku = entitlement_data.get('sku', {})
+    # `or` rather than a get() default: Google returns these keys as empty lists.
+    price = (entitlement_data.get('price_by_resources') or [{}])[0].get('price', {})
+    suspension_reasons = google_subscription.get('suspension_reasons') or [-1]
 
     data['sku'] = sku.get('name', '-')
     data['product'] = sku.get('product', {}).get('name', '-')
@@ -153,17 +218,15 @@ def _process_google_data(google_subscription):
         'value', {}).get('int64_value', '-')
     data['assigned_units'] = get_google_parameter('assigned_units', google_subscription.get('parameters', {})).get(
         'value', {}).get('int64_value', '-')
-    data['effective_price'] = get_price(entitlement_data.get(
-        'price_by_resources', [{}])[0].get('price', {}).get('effective_price', {}))
-    data['base_price'] = get_price(entitlement_data.get(
-        'price_by_resources', [{}])[0].get('price', {}).get('base_price', {}))
+    data['effective_price'] = get_price(price.get('effective_price', {}))
+    data['base_price'] = get_price(price.get('base_price', {}))
     data['created_time'] = google_subscription.get('create_time', '-')
     data['commitment_start_date'] = google_subscription.get('commitment_settings', {}).get('start_time', '-')
     data['commitment_end_date'] = google_subscription.get('commitment_settings', {}).get('end_time', '-')
     data['renewal_status'] = get_value(
         google_subscription.get('commitment_settings', ''), 'renewal_settings', 'enable_renewal')
     data['status'] = get_entitlement_status(google_subscription.get('provisioning_state'))
-    data['suspension_reasons'] = get_suspension_reasons(google_subscription.get('suspension_reasons', [-1])[0])
+    data['suspension_reasons'] = get_suspension_reasons(suspension_reasons[0])
     data['purchase_order_id'] = google_subscription.get('purchase_order_id', '-')
     data['error'] = google_subscription.get('error', '-')
 
@@ -181,15 +244,23 @@ def _get_consumed_value_from_usage(client, subscription):
 
 
 def get_item_data(items):
+    """Return (display name, MPN).
+
+    Must stay two values: _process_line unpacks two, and HEADERS has one label
+    for each. The billing report in cloudblue/google-workspace-connect-report
+    has a same-named helper that returns three (it also reports Item Period) --
+    mixing the two is what caused LITE-35404.
+    """
     if len(items) == 0:
-        return '-', '-', '-'
+        return '-', '-'
     elif len(items) == 1:
-        return items[0]['display_name'], items[0]['mpn'], items[0]['period']
+        return items[0]['display_name'], items[0]['mpn']
     else:
         for item in items:
             if 'GOOGLE_DRIVE_STORAGE' in item.get('mpn'):
-                return 'Google Drive Storage', 'GOOGLE_DRIVE_STORAGE', item.get('period')
-        return items[0]['display_name'], items[0]['mpn'], items[0]['period']
+                return 'Google Drive Storage', 'GOOGLE_DRIVE_STORAGE'
+
+        return items[0]['display_name'], items[0]['mpn']
 
 
 def _process_line(subscription, google_client, connect_client):

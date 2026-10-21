@@ -1,2 +1,6 @@
 debug.log
-/__pycache__
+__pycache__/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
