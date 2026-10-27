@@ -900,8 +900,7 @@
           "id": "date",
           "type": "date_range",
           "name": "Subscription Creation",
-          "description": "Enter billing period date range (limited to 2-month range)",
-          "required": true
+          "description": "Optional: in case that is desired, report can be limited to subscriptions created in the selected period of time"
         },
         {
           "id": "connection_type",

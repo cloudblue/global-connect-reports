@@ -4,6 +4,7 @@
 # All rights reserved.
 #
 
+import json
 import os
 from unittest.mock import MagicMock
 
@@ -20,6 +21,8 @@ from reports.google_workspace_billing_report.entrypoint import (
     get_item_data,
 )
 from reports.http import GoogleAPIClientError
+
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
 
 XLSX_TEMPLATE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -103,10 +106,10 @@ def subscription():
         'external_id': 'EXT-0001',
         'status': 'active',
         'params': [
-            {'id': 'domain', 'value': 'example.com'},
-            {'id': 'customer_id', 'value': CUSTOMER_ID},
-            {'id': 'entitlement_id', 'value': ENTITLEMENT_ID},
-            {'id': 'purchase_type', 'value': 'commitment'},
+            {'id': 'PRM-550-104-278-0011', 'name': 'domain', 'value': 'example.com'},
+            {'id': 'PRM-550-104-278-0019', 'name': 'customer_id', 'value': CUSTOMER_ID},
+            {'id': 'PRM-550-104-278-0020', 'name': 'entitlement_id', 'value': ENTITLEMENT_ID},
+            {'id': 'PRM-550-104-278-0090', 'name': 'purchase_type', 'value': 'commitment'},
         ],
         'items': [{
             'display_name': 'Google Workspace Business Standard',
@@ -332,3 +335,57 @@ def test_non_google_product_selection_is_reported(connect_client, parameters, go
 
     assert len(rows) == 1
     assert 'None of the selected products is a Google product' in rows[0][-1]
+
+
+OLIVETTI_CUSTOMER_ID = 'Si3BLR4NGdhk0m'
+OLIVETTI_ENTITLEMENT_ID = 'SUVs8ePhqWG2TE'
+
+
+@pytest.fixture
+def olivetti_subscription():
+    """The subscription from LITE-35433, exactly as the Connect API returns it."""
+    with open(os.path.join(FIXTURES, 'subscription_as_9586_4425_7252.json')) as fixture:
+        return json.load(fixture)
+
+
+@pytest.fixture
+def olivetti_google():
+    """A Google client that knows the entitlement that subscription points at."""
+    return FakeGoogleClient(entitlements=[_entitlement(entitlement_id=OLIVETTI_ENTITLEMENT_ID)])
+
+
+def test_google_parameters_are_found_on_a_real_subscription(olivetti_subscription, olivetti_google):
+    """Regression test for LITE-35433.
+
+    Connect returns params with a product specific id and a separate name:
+    id 'PRM-550-104-278-0019', name 'customer_id'. The lookup matched on id
+    while the report passes names, so customer_id and entitlement_id came back
+    empty and every google_* column was reported as '-' with
+    'Subscription has missing google parameters.' in Error Details.
+    """
+    row = _process_line(olivetti_subscription, olivetti_google, MagicMock(get=lambda url: []))
+
+    assert row[HEADERS.index('Error Details')] == '-'
+    assert row[HEADERS.index('Google Customer ID')] == OLIVETTI_CUSTOMER_ID
+    assert row[HEADERS.index('Google Entitlement ID')] == OLIVETTI_ENTITLEMENT_ID
+    assert row[HEADERS.index('Purchase Type')] == 'transfer'
+    assert row[HEADERS.index('Google Domain')].startswith('goog-test.')
+
+
+def test_google_columns_are_filled_on_a_real_subscription(olivetti_subscription, olivetti_google):
+    row = _process_line(olivetti_subscription, olivetti_google, MagicMock(get=lambda url: []))
+
+    assert row[HEADERS.index('Google Entitlement Status')] == 'active'
+    assert row[HEADERS.index('Google Assigned Units')] == 20
+    assert row[HEADERS.index('Google Maximum Units')] == 50
+    assert row[HEADERS.index('Google Commitment End Date')] == '2027-01-10T08:00:00Z'
+    assert row[HEADERS.index('Google SKU')] == 'accounts/A-1/skus/1010020027'
+    assert len(row) == len(HEADERS)
+
+
+def test_anniversary_without_month_is_reported(olivetti_subscription, olivetti_google):
+    """A monthly subscription has billing.anniversary.day but no month."""
+    row = _process_line(olivetti_subscription, olivetti_google, MagicMock(get=lambda url: []))
+
+    assert row[HEADERS.index('Anniversary Day')] == 13
+    assert row[HEADERS.index('Anniversary Month')] == '-'

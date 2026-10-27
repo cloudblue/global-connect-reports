@@ -1,0 +1,80 @@
+{
+    "id": "AS-9586-4425-7252",
+    "status": "active",
+    "events": {
+        "created": {"at": "2026-10-13T11:13:10+00:00"},
+        "updated": {"at": "2026-10-13T11:15:00+00:00"}
+    },
+    "external_id": "1028773",
+    "external_uid": "20146325-f16f-4ed3-bf91-4c5e44696afe",
+    "product": {"id": "PRD-550-104-278", "name": "Google Workspace", "status": "published"},
+    "connection": {
+        "id": "CT-6495-4965",
+        "type": "test",
+        "provider": {"id": "PA-272-379", "name": "Olivetti S.p.a."},
+        "vendor": {"id": "VA-188-593", "name": "Google"},
+        "hub": {"id": "HB-2223-8597", "name": "Olivetti Hub Lab"}
+    },
+    "items": [
+        {
+            "id": "PRD_550_104_278_0060",
+            "global_id": "PRD-550-104-278-0060",
+            "display_name": "Google Workspace Business Starter Flexible",
+            "mpn": "Google_Workspace_Business_Starter_Flexible",
+            "item_type": "reservation",
+            "period": "monthly",
+            "quantity": 1.0,
+            "type": "Licenses"
+        }
+    ],
+    "params": [
+        {"id": "PRM-550-104-278-0011", "name": "domain", "type": "text",
+         "value": "goog-test.test131026transfer3.olivetti.com.test2.helab.nuvolaitaliana.it"},
+        {"id": "PRM-550-104-278-0012", "name": "admin_email", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0013", "name": "transfer_token", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0018", "name": "current_step", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0019", "name": "customer_id", "type": "text", "value": "Si3BLR4NGdhk0m"},
+        {"id": "PRM-550-104-278-0020", "name": "entitlement_id", "type": "text", "value": "SUVs8ePhqWG2TE"},
+        {"id": "PRM-550-104-278-0021", "name": "operation_name", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0025", "name": "customer_email", "type": "email", "value": ""},
+        {"id": "PRM-550-104-278-0028", "name": "domain_verification", "type": "dropdown", "value": ""},
+        {"id": "PRM-550-104-278-0029", "name": "migration_info", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0076", "name": "accept_transfer_subscription", "type": "dropdown", "value": "yes"},
+        {"id": "PRM-550-104-278-0078", "name": "customer_type", "type": "dropdown", "value": ""},
+        {"id": "PRM-550-104-278-0080", "name": "institute_type", "type": "dropdown", "value": ""},
+        {"id": "PRM-550-104-278-0081", "name": "institute_size", "type": "dropdown", "value": ""},
+        {"id": "PRM-550-104-278-0082", "name": "website", "type": "domain", "value": ""},
+        {"id": "PRM-550-104-278-0083", "name": "item_validation_done", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0087", "name": "migration_info_object", "type": "object", "value": ""},
+        {"id": "PRM-550-104-278-0088", "name": "customer_address", "type": "address", "value": ""},
+        {"id": "PRM-550-104-278-0089", "name": "is_import", "type": "dropdown", "value": ""},
+        {"id": "PRM-550-104-278-0090", "name": "purchase_type", "type": "dropdown", "value": "transfer"},
+        {"id": "admin_console_uri", "name": "admin_console_uri", "type": "url",
+         "value": "https://admin.google.com/ac?ecid=C00hqh6sn"},
+        {"id": "customer_cloud_identity_id", "name": "customer_cloud_identity_id", "type": "text",
+         "value": "C00hqh6sn"},
+        {"id": "PRM-550-104-278-0096", "name": "cb_autorenewal", "type": "dropdown",
+         "value": "active_auto_renewal_status"},
+        {"id": "PRM-550-104-278-0099", "name": "customer_exclusive_offer", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0102", "name": "nce_promo_final", "type": "object", "value": ""},
+        {"id": "PRM-550-104-278-0103", "name": "cb_promo_draft", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0104", "name": "cb_promo_final", "type": "text", "value": ""},
+        {"id": "PRM-550-104-278-0105", "name": "cb_promo_accept", "type": "checkbox", "value": ""}
+    ],
+    "tiers": {
+        "customer": {"id": "TA-5088-1630-6990", "external_id": "1006832", "name": "Valentina TestConto"},
+        "tier1": {"id": "TA-4967-4278-7551", "external_id": "1000006", "name": "Telecom Italia S.p.A. Conto (Lab)"},
+        "tier2": {"id": "TA-3636-2950-8965", "external_id": "1", "name": "TelecomItaliaDigitalSolutions"}
+    },
+    "marketplace": {"id": "MP-19359", "name": "Olivetti S.P.A"},
+    "contract": {
+        "id": "CRD-59141-85903-90001",
+        "name": "Contract of Google Direct Distribution Agreement for Olivetti SPA"
+    },
+    "billing": {
+        "period": {"delta": 1.0, "uom": "monthly"},
+        "next_date": "2026-11-13T11:15:00+00:00",
+        "anniversary": {"day": 13}
+    },
+    "template": {"id": "TL-434-905-151", "name": "Default Activation Template"}
+}
