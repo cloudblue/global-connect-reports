@@ -389,3 +389,21 @@ def test_anniversary_without_month_is_reported(olivetti_subscription, olivetti_g
 
     assert row[HEADERS.index('Anniversary Day')] == 13
     assert row[HEADERS.index('Anniversary Month')] == '-'
+
+
+def test_one_entitlement_is_looked_up_once(subscription):
+    """Subscriptions sharing an entitlement must not spend the quota twice."""
+    google = FakeGoogleClient()
+    google.offer_calls = 0
+    inner = google.get_entitlement_offer
+
+    def counting(customer_id, entitlement_id):
+        google.offer_calls += 1
+        return inner(customer_id, entitlement_id)
+
+    google.get_entitlement_offer = counting
+
+    entrypoint._process_google_subscription(subscription, google)
+    entrypoint._process_google_subscription(subscription, google)
+
+    assert google.offer_calls == 1

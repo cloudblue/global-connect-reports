@@ -172,15 +172,18 @@ def _process_google_subscription(subscription, google_client):
 
 
 def _fill_subscription_entitlement_offer_data(google_client, google_customer_id, entitlement_id):
+    # setdefault: Connect can hold an entitlement_id that Google did not return
+    # for this customer, in which case the key does not exist yet.
+    entitlement = subscriptions_dict[google_customer_id].setdefault(entitlement_id, {})
+    if 'entitlement_data' in entitlement or 'error' in entitlement:
+        # Another subscription on the same entitlement already looked it up.
+        return
     try:
         entitlement_offer_data = google_client.get_entitlement_offer(google_customer_id, entitlement_id)
     except GoogleAPIClientError as err:
         subscriptions_dict[google_customer_id][entitlement_id] = {'error': str(err)}
         return
 
-    # setdefault: Connect can hold an entitlement_id that Google did not return
-    # for this customer, in which case the key does not exist yet.
-    entitlement = subscriptions_dict[google_customer_id].setdefault(entitlement_id, {})
     entitlement['entitlement_data'] = entitlement_offer_data
 
 
