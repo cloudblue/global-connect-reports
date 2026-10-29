@@ -57,17 +57,18 @@ class GoogleAPIClient(object):
         self.entitlements_limiter = RateLimiter(ENTITLEMENTS_PER_MINUTE)
         self.retry_budget = RETRY_BUDGET
 
-    def get_customer_entitlements(self, customer_id):
+    def get_customer_entitlements(self, customer_id, environment):
         return self._get(
             f'/api/customer_entitlements?marketplace_id={self.marketplace_id}'
-            f'&customer_id={customer_id}',
+            f'&customer_id={customer_id}&environment={environment}',
             limiter=self.entitlements_limiter,
         )
 
-    def get_entitlement_offer(self, customer_id, entitlement_id):
+    def get_entitlement_offer(self, customer_id, entitlement_id, environment):
         return self._get(
             f'/api/entitlement_offer?marketplace_id={self.marketplace_id}'
-            f'&customer_id={customer_id}&entitlement_id={entitlement_id}',
+            f'&customer_id={customer_id}&entitlement_id={entitlement_id}'
+            f'&environment={environment}',
         )
 
     def get_biling_records(self, entitlement_id, month, year):

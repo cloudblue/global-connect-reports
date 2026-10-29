@@ -163,37 +163,44 @@ def _process_google_subscription(subscription, google_client):
     if not google_customer_id or not entitlement_id:
         res = {'error': 'Subscription has missing google parameters.'}
         return res
-    if google_customer_id not in subscriptions_dict.keys():
-        _get_google_subscriptions(google_client, google_customer_id)
-    if subscriptions_dict[google_customer_id].get('error'):
-        return subscriptions_dict[google_customer_id]
-    _fill_subscription_entitlement_offer_data(google_client, google_customer_id, entitlement_id)
-    return subscriptions_dict.get(google_customer_id).get(entitlement_id, {})
+    # Test and preview subscriptions live in the provider's test Google
+    # account. Asking the production account for them answers 404.
+    environment = subscription['connection']['type']
+    customer = (environment, google_customer_id)
+    if customer not in subscriptions_dict.keys():
+        _get_google_subscriptions(google_client, customer)
+    if subscriptions_dict[customer].get('error'):
+        return subscriptions_dict[customer]
+    _fill_subscription_entitlement_offer_data(google_client, customer, entitlement_id)
+    return subscriptions_dict.get(customer).get(entitlement_id, {})
 
 
-def _fill_subscription_entitlement_offer_data(google_client, google_customer_id, entitlement_id):
+def _fill_subscription_entitlement_offer_data(google_client, customer, entitlement_id):
+    environment, google_customer_id = customer
     # setdefault: Connect can hold an entitlement_id that Google did not return
     # for this customer, in which case the key does not exist yet.
-    entitlement = subscriptions_dict[google_customer_id].setdefault(entitlement_id, {})
+    entitlement = subscriptions_dict[customer].setdefault(entitlement_id, {})
     if 'entitlement_data' in entitlement or 'error' in entitlement:
         # Another subscription on the same entitlement already looked it up.
         return
     try:
-        entitlement_offer_data = google_client.get_entitlement_offer(google_customer_id, entitlement_id)
+        entitlement_offer_data = google_client.get_entitlement_offer(
+            google_customer_id, entitlement_id, environment)
     except GoogleAPIClientError as err:
-        subscriptions_dict[google_customer_id][entitlement_id] = {'error': str(err)}
+        subscriptions_dict[customer][entitlement_id] = {'error': str(err)}
         return
 
     entitlement['entitlement_data'] = entitlement_offer_data
 
 
-def _get_google_subscriptions(google_client, google_customer_id):
+def _get_google_subscriptions(google_client, customer):
+    environment, google_customer_id = customer
     try:
-        entitlements = google_client.get_customer_entitlements(google_customer_id)
+        entitlements = google_client.get_customer_entitlements(google_customer_id, environment)
     except GoogleAPIClientError as err:
-        subscriptions_dict[google_customer_id] = {'error': str(err)}
+        subscriptions_dict[customer] = {'error': str(err)}
         return
-    subscriptions_dict[google_customer_id] = _entitlements_as_dict(entitlements)
+    subscriptions_dict[customer] = _entitlements_as_dict(entitlements)
 
 
 def _entitlements_as_dict(entitlements):

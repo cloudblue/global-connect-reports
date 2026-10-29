@@ -83,14 +83,15 @@ def answers(monkeypatch, *responses):
 def test_the_urls_are_the_ones_the_extension_serves(client, clock, monkeypatch):
     calls = answers(monkeypatch, FakeResponse(200, body=[]))
 
-    client.get_customer_entitlements('C-1')
-    client.get_entitlement_offer('C-1', 'E-1')
+    client.get_customer_entitlements('C-1', 'production')
+    client.get_entitlement_offer('C-1', 'E-1', 'test')
     client.get_biling_records('E-1', 10, 2026)
 
     assert calls == [
-        'https://gms.example.com/api/customer_entitlements?marketplace_id=MP-19359&customer_id=C-1',
+        'https://gms.example.com/api/customer_entitlements?marketplace_id=MP-19359'
+        '&customer_id=C-1&environment=production',
         'https://gms.example.com/api/entitlement_offer?marketplace_id=MP-19359'
-        '&customer_id=C-1&entitlement_id=E-1',
+        '&customer_id=C-1&entitlement_id=E-1&environment=test',
         'https://gms.example.com/api/entitlements/E-1?month=10&year=2026',
     ]
 
@@ -102,7 +103,7 @@ def test_a_quota_error_is_retried(client, clock, monkeypatch):
         FakeResponse(200, body=[{'name': 'entitlements/E-1'}]),
     )
 
-    assert client.get_customer_entitlements('C-1') == [{'name': 'entitlements/E-1'}]
+    assert client.get_customer_entitlements('C-1', 'production') == [{'name': 'entitlements/E-1'}]
     assert len(calls) == 2
     assert clock.slept == [2.0]
 
@@ -111,7 +112,7 @@ def test_the_backoff_grows_and_then_gives_up(client, clock, monkeypatch):
     calls = answers(monkeypatch, FakeResponse(429, content=QUOTA_ERROR))
 
     with pytest.raises(GoogleAPIClientError) as error:
-        client.get_customer_entitlements('C-1')
+        client.get_customer_entitlements('C-1', 'production')
 
     assert len(calls) == http.MAX_ATTEMPTS
     assert clock.slept == [2.0, 4.0, 8.0, 16.0]
@@ -125,7 +126,7 @@ def test_a_retry_after_header_is_honoured(client, clock, monkeypatch):
         FakeResponse(200, body=[]),
     )
 
-    client.get_customer_entitlements('C-1')
+    client.get_customer_entitlements('C-1', 'production')
 
     assert clock.slept == [7.0]
 
@@ -135,7 +136,7 @@ def test_retrying_stops_once_the_budget_is_spent(client, clock, monkeypatch):
     calls = answers(monkeypatch, FakeResponse(429, content=QUOTA_ERROR, headers={'Retry-After': '30'}))
 
     with pytest.raises(GoogleAPIClientError):
-        client.get_customer_entitlements('C-1')
+        client.get_customer_entitlements('C-1', 'production')
 
     assert len(calls) == 1
     assert clock.slept == []
@@ -145,7 +146,7 @@ def test_a_missing_customer_is_not_retried(client, clock, monkeypatch):
     calls = answers(monkeypatch, FakeResponse(404, content=b'404 Customer name not found'))
 
     with pytest.raises(GoogleAPIClientError) as error:
-        client.get_customer_entitlements('C-1')
+        client.get_customer_entitlements('C-1', 'production')
 
     assert len(calls) == 1
     assert clock.slept == []
@@ -156,7 +157,7 @@ def test_a_network_error_is_reported_like_any_other(client, clock, monkeypatch):
     answers(monkeypatch, requests.ConnectionError('connection reset'))
 
     with pytest.raises(GoogleAPIClientError) as error:
-        client.get_customer_entitlements('C-1')
+        client.get_customer_entitlements('C-1', 'production')
 
     assert 'connection reset' in str(error.value)
 
@@ -166,7 +167,7 @@ def test_entitlement_calls_are_paced(client, clock, monkeypatch):
     answers(monkeypatch, FakeResponse(200, body=[]))
 
     for customer_id in ('C-1', 'C-2', 'C-3'):
-        client.get_customer_entitlements(customer_id)
+        client.get_customer_entitlements(customer_id, 'production')
 
     assert clock.slept == [60.0]
 
@@ -176,6 +177,6 @@ def test_offer_calls_are_not_paced(client, clock, monkeypatch):
     answers(monkeypatch, FakeResponse(200, body={}))
 
     for entitlement_id in ('E-1', 'E-2', 'E-3'):
-        client.get_entitlement_offer('C-1', entitlement_id)
+        client.get_entitlement_offer('C-1', entitlement_id, 'production')
 
     assert clock.slept == []

@@ -6,6 +6,7 @@
 
 import json
 import os
+from copy import deepcopy
 from unittest.mock import MagicMock
 
 import pytest
@@ -47,16 +48,21 @@ class FakeGoogleClient:
         self.offer = offer if offer is not None else _offer()
         self.entitlements_error = entitlements_error
         self.offer_error = offer_error
+        self.environments = []
 
-    def get_customer_entitlements(self, customer_id):
+    def get_customer_entitlements(self, customer_id, environment):
+        self.environments.append(environment)
         if self.entitlements_error:
             raise GoogleAPIClientError(self.entitlements_error)
-        return self.entitlements
+        # A copy per call, the way the real answer arrives: the report stores
+        # what it gets, and a shared dict would hide a second lookup.
+        return deepcopy(self.entitlements)
 
-    def get_entitlement_offer(self, customer_id, entitlement_id):
+    def get_entitlement_offer(self, customer_id, entitlement_id, environment):
+        self.environments.append(environment)
         if self.offer_error:
             raise GoogleAPIClientError(self.offer_error)
-        return self.offer
+        return deepcopy(self.offer)
 
 
 def _entitlement(entitlement_id=ENTITLEMENT_ID, **overrides):
@@ -397,9 +403,9 @@ def test_one_entitlement_is_looked_up_once(subscription):
     google.offer_calls = 0
     inner = google.get_entitlement_offer
 
-    def counting(customer_id, entitlement_id):
+    def counting(customer_id, entitlement_id, environment):
         google.offer_calls += 1
-        return inner(customer_id, entitlement_id)
+        return inner(customer_id, entitlement_id, environment)
 
     google.get_entitlement_offer = counting
 
@@ -407,3 +413,25 @@ def test_one_entitlement_is_looked_up_once(subscription):
     entrypoint._process_google_subscription(subscription, google)
 
     assert google.offer_calls == 1
+
+
+def test_the_subscription_environment_reaches_google(subscription):
+    """A test subscription must be looked up in the test Google account: the
+    production account does not hold its customer and answers 404."""
+    google = FakeGoogleClient()
+
+    entrypoint._process_google_subscription(subscription, google)
+
+    assert google.environments == ['test', 'test']
+
+
+def test_the_same_customer_is_cached_per_environment(subscription):
+    """The same Google customer id in two environments is two customers."""
+    google = FakeGoogleClient()
+    production = deepcopy(subscription)
+    production['connection']['type'] = 'production'
+
+    entrypoint._process_google_subscription(subscription, google)
+    entrypoint._process_google_subscription(production, google)
+
+    assert google.environments == ['test', 'test', 'production', 'production']
