@@ -6,6 +6,7 @@
 
 import json
 import os
+from copy import deepcopy
 from unittest.mock import MagicMock
 
 import pytest
@@ -47,16 +48,21 @@ class FakeGoogleClient:
         self.offer = offer if offer is not None else _offer()
         self.entitlements_error = entitlements_error
         self.offer_error = offer_error
+        self.environments = []
 
-    def get_customer_entitlements(self, customer_id):
+    def get_customer_entitlements(self, customer_id, environment):
+        self.environments.append(environment)
         if self.entitlements_error:
             raise GoogleAPIClientError(self.entitlements_error)
-        return self.entitlements
+        # A copy per call, the way the real answer arrives: the report stores
+        # what it gets, and a shared dict would hide a second lookup.
+        return deepcopy(self.entitlements)
 
-    def get_entitlement_offer(self, customer_id, entitlement_id):
+    def get_entitlement_offer(self, customer_id, entitlement_id, environment):
+        self.environments.append(environment)
         if self.offer_error:
             raise GoogleAPIClientError(self.offer_error)
-        return self.offer
+        return deepcopy(self.offer)
 
 
 def _entitlement(entitlement_id=ENTITLEMENT_ID, **overrides):
@@ -389,3 +395,59 @@ def test_anniversary_without_month_is_reported(olivetti_subscription, olivetti_g
 
     assert row[HEADERS.index('Anniversary Day')] == 13
     assert row[HEADERS.index('Anniversary Month')] == '-'
+
+
+def test_one_entitlement_is_looked_up_once(subscription):
+    """Subscriptions sharing an entitlement must not spend the quota twice."""
+    google = FakeGoogleClient()
+    google.offer_calls = 0
+    inner = google.get_entitlement_offer
+
+    def counting(customer_id, entitlement_id, environment):
+        google.offer_calls += 1
+        return inner(customer_id, entitlement_id, environment)
+
+    google.get_entitlement_offer = counting
+
+    entrypoint._process_google_subscription(subscription, google)
+    entrypoint._process_google_subscription(subscription, google)
+
+    assert google.offer_calls == 1
+
+
+@pytest.mark.parametrize('connection_type', ['production', 'test', 'preview'])
+def test_the_subscription_environment_reaches_google(subscription, connection_type):
+    """Connect reports three connection types, and each one picks a Google
+    account: the production account does not hold a test customer and
+    answers 404 for it."""
+    google = FakeGoogleClient()
+    subscription['connection']['type'] = connection_type
+
+    entrypoint._process_google_subscription(subscription, google)
+
+    assert google.environments == [connection_type, connection_type]
+
+
+def test_a_subscription_without_a_connection_does_not_reach_google(subscription):
+    """Without a connection there is no environment to ask about, and the row
+    fails on the same connection a few columns later either way."""
+    google = FakeGoogleClient()
+    del subscription['connection']
+
+    row = entrypoint._safe_process_line(subscription, google, MagicMock(get=lambda url: []))
+
+    assert google.environments == []
+    assert "KeyError: 'connection'" in row[-1]
+    assert len(row) == len(HEADERS)
+
+
+def test_the_same_customer_is_cached_per_environment(subscription):
+    """The same Google customer id in two environments is two customers."""
+    google = FakeGoogleClient()
+    production = deepcopy(subscription)
+    production['connection']['type'] = 'production'
+
+    entrypoint._process_google_subscription(subscription, google)
+    entrypoint._process_google_subscription(production, google)
+
+    assert google.environments == ['test', 'test', 'production', 'production']
