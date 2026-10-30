@@ -415,14 +415,30 @@ def test_one_entitlement_is_looked_up_once(subscription):
     assert google.offer_calls == 1
 
 
-def test_the_subscription_environment_reaches_google(subscription):
-    """A test subscription must be looked up in the test Google account: the
-    production account does not hold its customer and answers 404."""
+@pytest.mark.parametrize('connection_type', ['production', 'test', 'preview'])
+def test_the_subscription_environment_reaches_google(subscription, connection_type):
+    """Connect reports three connection types, and each one picks a Google
+    account: the production account does not hold a test customer and
+    answers 404 for it."""
     google = FakeGoogleClient()
+    subscription['connection']['type'] = connection_type
 
     entrypoint._process_google_subscription(subscription, google)
 
-    assert google.environments == ['test', 'test']
+    assert google.environments == [connection_type, connection_type]
+
+
+def test_a_subscription_without_a_connection_does_not_reach_google(subscription):
+    """Without a connection there is no environment to ask about, and the row
+    fails on the same connection a few columns later either way."""
+    google = FakeGoogleClient()
+    del subscription['connection']
+
+    row = entrypoint._safe_process_line(subscription, google, MagicMock(get=lambda url: []))
+
+    assert google.environments == []
+    assert "KeyError: 'connection'" in row[-1]
+    assert len(row) == len(HEADERS)
 
 
 def test_the_same_customer_is_cached_per_environment(subscription):
