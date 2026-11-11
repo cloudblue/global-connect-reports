@@ -237,20 +237,18 @@ def test_json_renderer_emits_one_key_per_header(connect_client, parameters, goog
     assert rows[0]['error_details'] == '-'
 
 
-def test_price_columns_keep_the_upstream_mapping(subscription, google):
-    """Pinned, not endorsed.
-
-    'Google Offer Effective Price' is filled from the offer's base_price and
-    'Google Offer Price' from its effective_price, which reads inverted. The
-    mapping is identical in cloudblue/google-workspace-connect-report, so it is
-    left alone here rather than silently flipping prices in a report used for
-    reconciliation. Flip both this test and _process_line together if the
-    report owner confirms it is wrong.
+def test_price_columns_follow_their_headers(subscription, google):
+    """The mapping used to be inverted and was pinned here until the report
+    owner confirmed it. Google's own payload for offer SofIBbt81pRtwl settles
+    it: the offer carries a base_price and no effective_price, and the report
+    printed that base_price under 'Google Offer Effective Price' while the
+    empty effective_price showed as '-' under 'Google Offer Price'.
+    cloudblue/google-workspace-connect-report still has the old mapping.
     """
     row = _process_line(subscription, google, MagicMock(get=lambda url: []))
 
-    assert row[HEADERS.index('Google Offer Effective Price')] == '12.00 EUR'  # base_price
-    assert row[HEADERS.index('Google Offer Price')] == '10.50 EUR'  # effective_price
+    assert row[HEADERS.index('Google Offer Effective Price')] == '10.50 EUR'  # effective_price
+    assert row[HEADERS.index('Google Offer Price')] == '12.00 EUR'  # base_price
 
 
 def test_xlsx_renderer_yields_plain_rows(connect_client, parameters, google):
