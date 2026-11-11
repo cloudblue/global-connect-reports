@@ -243,7 +243,7 @@ def test_price_columns_follow_their_headers(subscription, google):
     it: the offer carries a base_price and no effective_price, and the report
     printed that base_price under 'Google Offer Effective Price' while the
     empty effective_price showed as '-' under 'Google Offer Price'.
-    cloudblue/google-workspace-connect-report still has the old mapping.
+    The archived cloudblue/google-workspace-connect-report keeps the old one.
     """
     row = _process_line(subscription, google, MagicMock(get=lambda url: []))
 
