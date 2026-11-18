@@ -198,6 +198,31 @@ def test_get_item_data_returns_two_values():
     assert len(get_item_data(items + items)) == 2
 
 
+def test_default_statuses_include_processing(connect_client, parameters, google):
+    """Regression test for LITE-35578.
+
+    With no status selected the report falls back to DEFAULT_STATUSES, which
+    left 'processing' out, so subscriptions still being provisioned never
+    reached the report. The sibling google_workspace_report offers the same
+    five statuses as choices and constrains nothing when none is selected.
+    """
+    _run(connect_client, parameters, 'json')
+
+    query = str(connect_client.ns.return_value.assets.filter.call_args[0][0])
+
+    assert 'in(status,(active,processing,suspended,terminated,terminating))' in query
+
+
+def test_selected_statuses_win_over_the_default(connect_client, parameters, google):
+    parameters['status'] = {'all': False, 'choices': ['processing']}
+
+    _run(connect_client, parameters, 'json')
+
+    query = str(connect_client.ns.return_value.assets.filter.call_args[0][0])
+
+    assert 'in(status,(processing))' in query
+
+
 def test_process_line_returns_one_value_per_header(subscription, google):
     row = _process_line(subscription, google, MagicMock(get=lambda url: []))
 
