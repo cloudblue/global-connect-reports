@@ -31,7 +31,7 @@ HEADERS = (
 
 GOOGLE_PRODUCTS = ['PRD-861-570-450', 'PRD-550-104-278']
 
-DEFAULT_STATUSES = ['active', 'suspended', 'terminated', 'terminating']
+DEFAULT_STATUSES = ['active', 'processing', 'suspended', 'terminated', 'terminating']
 
 subscriptions_dict = {}
 
